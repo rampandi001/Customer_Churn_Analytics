@@ -4,31 +4,37 @@ const cors = require("cors");
 require("dotenv").config();
 
 const connectDB = require("./config/db");
-const Customer = require("./models/Customer");
-const customerRoutes = require("./routes/customerRoutes");
 
 const app = express();
 
-/* =========================================================
+/* =========================
+   DATABASE
+========================= */
+
+connectDB();
+
+/* =========================
    CORS
-========================================================= */
+========================= */
 
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
-  "https://churniq-backend-0c1x.onrender.com",
+  "http://localhost:4173",
+  "http://localhost:4174",
+  "http://localhost:4175",
 ];
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests without an Origin header
-      // such as Postman/curl/server-to-server requests
+      // Allow requests without an origin
+      // such as Postman or server-side requests
       if (!origin) {
         return callback(null, true);
       }
 
-      // Allow known origins
+      // Allow localhost development / preview
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
@@ -36,12 +42,10 @@ app.use(
       // Allow Vercel deployments
       if (
         origin.endsWith(".vercel.app") ||
-        origin.includes("vercel.app")
+        origin.includes(".vercel.app")
       ) {
         return callback(null, true);
       }
-
-      console.log("⚠️ CORS blocked:", origin);
 
       return callback(
         new Error("Not allowed by CORS")
@@ -63,45 +67,33 @@ app.use(
     ],
 
     credentials: false,
+
+    optionsSuccessStatus: 204,
   })
 );
 
-/* =========================================================
+/* =========================
    MIDDLEWARE
-========================================================= */
+========================= */
 
 app.use(express.json());
 
-app.use(express.urlencoded({ extended: true }));
+/* =========================
+   ROUTES
+========================= */
 
-/* =========================================================
-   DATABASE
-========================================================= */
+const customerRoutes = require("./routes/customerRoutes");
 
-connectDB();
+app.use("/api/customers", customerRoutes);
 
-/* =========================================================
-   ROOT
-========================================================= */
-
-app.get("/", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "ChurnIQ Backend is running 🚀",
-    service: "ChurnIQ API",
-    status: "online",
-  });
-});
-
-/* =========================================================
+/* =========================
    HEALTH CHECK
-========================================================= */
+========================= */
 
 app.get("/api/health", (req, res) => {
-  res.status(200).json({
+  res.json({
     success: true,
-    status: "healthy",
-    service: "ChurnIQ API",
+    message: "ChurnIQ backend is running",
     database:
       mongoose.connection.readyState === 1
         ? "connected"
@@ -109,189 +101,130 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-/* =========================================================
-   CUSTOMER ROUTES
-========================================================= */
+/* =========================
+   ANALYTICS
+========================= */
 
-console.log(
-  "Customer routes type:",
-  typeof customerRoutes
-);
+const Customer = require("./models/Customer");
 
-app.use(
-  "/api/customers",
-  customerRoutes
-);
+app.get("/api/analytics/summary", async (req, res) => {
+  try {
+    const customers = await Customer.find();
 
-/* =========================================================
-   ANALYTICS TEST
-========================================================= */
+    const totalCustomers = customers.length;
 
-app.get("/api/analytics-test", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Analytics endpoint is working 🚀",
-  });
-});
+    const highRisk = customers.filter(
+      (customer) =>
+        customer.churnStatus === "High"
+    ).length;
 
-/* =========================================================
-   ANALYTICS SUMMARY
-========================================================= */
+    const mediumRisk = customers.filter(
+      (customer) =>
+        customer.churnStatus === "Medium"
+    ).length;
 
-app.get(
-  "/api/analytics/summary",
-  async (req, res) => {
-    try {
-      console.log(
-        "📊 Analytics summary requested"
-      );
+    const lowRisk = customers.filter(
+      (customer) =>
+        customer.churnStatus === "Low"
+    ).length;
 
-      const customers =
-        await Customer.find().lean();
+    const totalRevenue = customers.reduce(
+      (total, customer) =>
+        total +
+        Number(customer.monthlySpend || 0),
+      0
+    );
 
-      const totalCustomers =
-        customers.length;
+    const averageChurnScore =
+      totalCustomers > 0
+        ? customers.reduce(
+            (total, customer) =>
+              total +
+              Number(customer.churnRisk || 0),
+            0
+          ) / totalCustomers
+        : 0;
 
-      const highRisk =
-        customers.filter(
-          (customer) =>
-            customer.churnStatus === "High"
-        ).length;
+    const subscriptionBreakdown = {};
 
-      const mediumRisk =
-        customers.filter(
-          (customer) =>
-            customer.churnStatus === "Medium"
-        ).length;
+    customers.forEach((customer) => {
+      const subscription =
+        customer.subscription || "Unknown";
 
-      const lowRisk =
-        customers.filter(
-          (customer) =>
-            customer.churnStatus === "Low"
-        ).length;
+      subscriptionBreakdown[subscription] =
+        (subscriptionBreakdown[subscription] || 0) +
+        1;
+    });
 
-      const totalRevenue =
-        customers.reduce(
-          (total, customer) =>
-            total +
-            Number(
-              customer.monthlySpend || 0
-            ),
-          0
-        );
-
-      const averageChurnScore =
-        totalCustomers > 0
-          ? customers.reduce(
-              (total, customer) =>
-                total +
-                Number(
-                  customer.churnRisk || 0
-                ),
-              0
-            ) / totalCustomers
-          : 0;
-
-      const subscriptionBreakdown = {};
-
-      customers.forEach((customer) => {
-        const plan =
-          customer.subscription ||
-          "Unknown";
-
-        subscriptionBreakdown[plan] =
-          (subscriptionBreakdown[plan] || 0) +
-          1;
-      });
-
-      const analyticsData = {
-        totalCustomers,
-        highRisk,
-        mediumRisk,
-        lowRisk,
-        totalRevenue,
-        averageChurnScore: Number(
-          averageChurnScore.toFixed(2)
-        ),
-        subscriptionBreakdown,
-      };
-
-      console.log(
-        "📊 Analytics result:",
-        analyticsData
-      );
-
-      return res.status(200).json({
-        success: true,
-        data: analyticsData,
-      });
-    } catch (error) {
-      console.error(
-        "❌ Analytics error:",
-        error
-      );
-
-      return res.status(500).json({
-        success: false,
-        message:
-          "Failed to generate analytics",
-        error: error.message,
-      });
-    }
-  }
-);
-
-/* =========================================================
-   404 HANDLER
-========================================================= */
-
-app.use((req, res) => {
-  console.log(
-    `❌ 404: ${req.method} ${req.originalUrl}`
-  );
-
-  res.status(404).json({
-    success: false,
-    message: "Route not found",
-    route: req.originalUrl,
-  });
-});
-
-/* =========================================================
-   GLOBAL ERROR HANDLER
-========================================================= */
-
-app.use(
-  (error, req, res, next) => {
+    res.json({
+      totalCustomers,
+      highRisk,
+      mediumRisk,
+      lowRisk,
+      totalRevenue,
+      averageChurnScore,
+      subscriptionBreakdown,
+    });
+  } catch (error) {
     console.error(
-      "❌ Server error:",
+      "Analytics error:",
       error.message
     );
 
-    if (
-      error.message ===
-      "Not allowed by CORS"
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "CORS origin not allowed",
-      });
-    }
-
     res.status(500).json({
-      success: false,
-      message: "Internal server error",
+      message: "Failed to load analytics",
       error: error.message,
     });
   }
-);
+});
 
-/* =========================================================
+/* =========================
+   ROOT
+========================= */
+
+app.get("/", (req, res) => {
+  res.json({
+    success: true,
+    message: "ChurnIQ Backend API",
+  });
+});
+
+/* =========================
+   404
+========================= */
+
+app.use((req, res) => {
+  res.status(404).json({
+    message: "Route not found",
+  });
+});
+
+/* =========================
+   ERROR HANDLER
+========================= */
+
+app.use((error, req, res, next) => {
+  console.error(
+    "Server error:",
+    error.message
+  );
+
+  if (error.message === "Not allowed by CORS") {
+    return res.status(403).json({
+      message: "CORS origin not allowed",
+    });
+  }
+
+  res.status(500).json({
+    message: "Internal server error",
+  });
+});
+
+/* =========================
    SERVER
-========================================================= */
+========================= */
 
-const PORT =
-  process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(

@@ -23,27 +23,34 @@ const allowedOrigins = [
   "http://localhost:4173",
   "http://localhost:4174",
   "http://localhost:4175",
+  "http://localhost:4176",
 ];
+
+const isAllowedOrigin = (origin) => {
+  // Allow requests without an origin
+  // such as Postman or server-side requests
+  if (!origin) {
+    return true;
+  }
+
+  // Allow ANY localhost port
+  if (/^http:\/\/localhost:\d+$/.test(origin)) {
+    return true;
+  }
+
+  // Allow Vercel deployments
+  if (origin.endsWith(".vercel.app")) {
+    return true;
+  }
+
+  // Allow explicitly listed origins
+  return allowedOrigins.includes(origin);
+};
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests without an origin
-      // such as Postman or server-side requests
-      if (!origin) {
-        return callback(null, true);
-      }
-
-      // Allow localhost development / preview
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      // Allow Vercel deployments
-      if (
-        origin.endsWith(".vercel.app") ||
-        origin.includes(".vercel.app")
-      ) {
+      if (isAllowedOrigin(origin)) {
         return callback(null, true);
       }
 

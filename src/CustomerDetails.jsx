@@ -1,36 +1,40 @@
-import { useEffect, useState } from "react";
-import {
-  ArrowLeft,
-  Edit3,
-  Mail,
-  MapPin,
-  User,
-  Calendar,
-  DollarSign,
-  ShieldAlert,
-  Save,
-  X,
-  RefreshCw,
-} from "lucide-react";
+import React, { useEffect, useState } from "react";
 
-const API_URL = "http://localhost:5000/api/customers";
+const API_URL =
+  "https://churniq-backend-0c1x.onrender.com/api/customers";
 
-export default function CustomerDetails({
+function CustomerDetails({
   customer: customerProp,
   onBack,
 }) {
-  const [customer, setCustomer] = useState(null);
+  const [customer, setCustomer] =
+    useState(customerProp || null);
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [loading, setLoading] =
+    useState(false);
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({});
+  const [saving, setSaving] =
+    useState(false);
 
-  // =====================================================
-  // GET MONGODB ID
-  // =====================================================
+  const [error, setError] =
+    useState("");
+
+  const [editMode, setEditMode] =
+    useState(false);
+
+  const [formData, setFormData] =
+    useState({
+      name: "",
+      email: "",
+      age: "",
+      gender: "",
+      location: "",
+      subscription: "",
+      monthlySpend: "",
+      tenure: "",
+      churnRisk: "",
+      churnStatus: "Low",
+    });
 
   const getMongoId = () => {
     return (
@@ -42,106 +46,109 @@ export default function CustomerDetails({
     );
   };
 
-  // =====================================================
-  // LOAD CUSTOMER
-  // =====================================================
+  useEffect(() => {
+    setCustomer(customerProp || null);
+  }, [customerProp]);
 
-  const loadCustomer = async () => {
-    const mongoId =
-      customerProp?._id ||
-      customerProp?.mongoId;
-
-    if (!mongoId) {
-      setError("MongoDB customer ID not found");
-      setLoading(false);
+  useEffect(() => {
+    if (!customer) {
       return;
     }
 
-    try {
-      setLoading(true);
-      setError("");
-
-      console.log(
-        "🔎 Loading customer with MongoDB ID:",
-        mongoId
-      );
-
-      const response = await fetch(
-        `${API_URL}/${mongoId}`
-      );
-
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        throw new Error(
-          result.message ||
-            "Failed to load customer"
-        );
-      }
-
-      console.log(
-        "✅ Customer loaded:",
-        result.data
-      );
-
-      setCustomer(result.data);
-      setFormData(result.data);
-    } catch (err) {
-      console.error(
-        "❌ Customer details error:",
-        err
-      );
-
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    setFormData({
+      name: customer.name || "",
+      email: customer.email || "",
+      age: customer.age ?? "",
+      gender: customer.gender || "",
+      location: customer.location || "",
+      subscription:
+        customer.subscription ||
+        customer.plan ||
+        "",
+      monthlySpend:
+        customer.monthlySpend ??
+        customer.revenue ??
+        "",
+      tenure: customer.tenure ?? "",
+      churnRisk:
+        customer.churnRisk ??
+        customer.score ??
+        "",
+      churnStatus:
+        customer.churnStatus ||
+        customer.risk ||
+        "Low",
+    });
+  }, [customer]);
 
   useEffect(() => {
+    const mongoId = getMongoId();
+
+    if (!mongoId) {
+      return;
+    }
+
+    const loadCustomer = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await fetch(
+          `${API_URL}/${mongoId}`
+        );
+
+        const result =
+          await response.json();
+
+        if (
+          !response.ok ||
+          !result.success
+        ) {
+          throw new Error(
+            result.message ||
+              "Failed to load customer"
+          );
+        }
+
+        setCustomer(result.data);
+      } catch (err) {
+        console.error(
+          "❌ Customer details error:",
+          err
+        );
+
+        setError(
+          err.message ||
+            "Failed to load customer."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
     loadCustomer();
-  }, [customerProp]);
+  }, []);
 
-  // =====================================================
-  // EDIT
-  // =====================================================
+  const handleChange = (event) => {
+    const {
+      name,
+      value,
+    } = event.target;
 
-  const handleEdit = () => {
-    setFormData({
-      ...customer,
-    });
-
-    setIsEditing(true);
-  };
-
-  // =====================================================
-  // INPUT CHANGE
-  // =====================================================
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-
-    setFormData((prev) => ({
-      ...prev,
+    setFormData((previous) => ({
+      ...previous,
       [name]: value,
     }));
   };
 
-  // =====================================================
-  // SAVE CUSTOMER
-  // =====================================================
+  const handleSave = async (event) => {
+    event.preventDefault();
 
-  const handleSave = async () => {
     const mongoId = getMongoId();
 
-    console.log(
-      "🆔 MongoDB ID used for update:",
-      mongoId
-    );
-
     if (!mongoId) {
-      alert(
-        "MongoDB ID not found. Please go back and open the customer again."
+      setError(
+        "MongoDB customer ID not found."
       );
       return;
     }
@@ -150,86 +157,78 @@ export default function CustomerDetails({
       setSaving(true);
       setError("");
 
-      const updateData = {
+      const payload = {
         name: formData.name,
         email: formData.email,
 
-        age:
-          formData.age !== "" &&
-          formData.age !== undefined
-            ? Number(formData.age)
-            : undefined,
+        age: formData.age
+          ? Number(formData.age)
+          : undefined,
 
         gender: formData.gender,
 
-        location: formData.location,
+        location:
+          formData.location,
 
         subscription:
           formData.subscription,
 
         monthlySpend:
-          formData.monthlySpend !== "" &&
-          formData.monthlySpend !== undefined
-            ? Number(formData.monthlySpend)
+          formData.monthlySpend
+            ? Number(
+                formData.monthlySpend
+              )
             : undefined,
 
         tenure:
-          formData.tenure !== "" &&
-          formData.tenure !== undefined
+          formData.tenure
             ? Number(formData.tenure)
             : undefined,
 
         churnRisk:
-          formData.churnRisk !== "" &&
-          formData.churnRisk !== undefined
-            ? Number(formData.churnRisk)
+          formData.churnRisk
+            ? Number(
+                formData.churnRisk
+              )
             : 0,
 
         churnStatus:
-          formData.churnStatus || "Low",
+          formData.churnStatus,
       };
 
-      console.log(
-        "📤 Sending update:",
-        updateData
-      );
+      const response =
+        await fetch(
+          `${API_URL}/${mongoId}`,
+          {
+            method: "PUT",
 
-      const response = await fetch(
-        `${API_URL}/${mongoId}`,
-        {
-          method: "PUT",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
 
-          headers: {
-            "Content-Type": "application/json",
-          },
-
-          body: JSON.stringify(updateData),
-        }
-      );
+            body: JSON.stringify(
+              payload
+            ),
+          }
+        );
 
       const result =
         await response.json();
 
-      console.log(
-        "📥 Update response:",
-        result
-      );
-
-      if (!response.ok || !result.success) {
+      if (
+        !response.ok ||
+        !result.success
+      ) {
         throw new Error(
           result.message ||
             "Failed to update customer"
         );
       }
 
-      // Update local customer state
       setCustomer(result.data);
 
-      setFormData(result.data);
-
-      setIsEditing(false);
-
-      setError("");
+      setEditMode(false);
 
       alert(
         "Customer updated successfully!"
@@ -240,659 +239,780 @@ export default function CustomerDetails({
         err
       );
 
-      setError(err.message);
-
-      alert(
-        `Failed to update customer: ${err.message}`
+      setError(
+        err.message ||
+          "Failed to update customer."
       );
     } finally {
       setSaving(false);
     }
   };
 
-  // =====================================================
-  // LOADING
-  // =====================================================
-
-  if (loading) {
+  if (!customer && loading) {
     return (
-      <div className="page-content">
+      <section className="panel page-panel">
         <div
           style={{
-            minHeight: "400px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexDirection: "column",
-            gap: "12px",
+            textAlign: "center",
+            padding: 60,
           }}
         >
-          <RefreshCw
-            size={28}
-            className="spin"
-          />
-
-          <p>
-            Loading customer details...
-          </p>
+          Loading customer...
         </div>
-      </div>
-    );
-  }
-
-  // =====================================================
-  // ERROR
-  // =====================================================
-
-  if (error && !customer) {
-    return (
-      <div className="page-content">
-        <button
-          className="btn btn-secondary"
-          onClick={onBack}
-        >
-          <ArrowLeft size={16} />
-          Back
-        </button>
-
-        <div
-          style={{
-            marginTop: "30px",
-            padding: "24px",
-            borderRadius: "12px",
-            border: "1px solid #ef4444",
-          }}
-        >
-          <h3>
-            Unable to load customer
-          </h3>
-
-          <p>{error}</p>
-        </div>
-      </div>
+      </section>
     );
   }
 
   if (!customer) {
     return (
-      <div className="page-content">
-        <button
-          className="btn btn-secondary"
-          onClick={onBack}
+      <section className="panel page-panel">
+        <div
+          style={{
+            textAlign: "center",
+            padding: 60,
+          }}
         >
-          <ArrowLeft size={16} />
-          Back
-        </button>
+          <h2>
+            Customer not found
+          </h2>
 
-        <p style={{ marginTop: "30px" }}>
-          Customer not found.
-        </p>
-      </div>
+          <button
+            type="button"
+            className="text-button"
+            onClick={onBack}
+            style={{
+              marginTop: 16,
+            }}
+          >
+            Back to Customers
+          </button>
+        </div>
+      </section>
     );
   }
 
-  // =====================================================
-  // HELPERS
-  // =====================================================
+  const customerId =
+    customer.customerId ||
+    customer.id ||
+    "-";
 
-  const riskClass =
-    customer.churnStatus === "High"
-      ? "high"
-      : customer.churnStatus === "Medium"
-      ? "medium"
-      : "low";
+  const risk =
+    customer.churnStatus ||
+    customer.risk ||
+    "Low";
 
-  const joinedDate = customer.createdAt
-    ? new Date(
-        customer.createdAt
-      ).toLocaleDateString()
-    : "-";
+  const score = Number(
+    customer.churnRisk ??
+      customer.score ??
+      0
+  );
 
-  // =====================================================
-  // UI
-  // =====================================================
+  const initials =
+    (customer.name || "Customer")
+      .split(" ")
+      .map(
+        (part) => part[0]
+      )
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
 
   return (
-    <div className="page-content">
-
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 18,
+      }}
+    >
       {/* HEADER */}
 
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "24px",
-          gap: "16px",
-          flexWrap: "wrap",
-        }}
-      >
-        <button
-          className="btn btn-secondary"
-          onClick={onBack}
-        >
-          <ArrowLeft size={16} />
-          Back to Customers
-        </button>
-
+      <section className="panel">
         <div
           style={{
             display: "flex",
-            gap: "10px",
+            justifyContent:
+              "space-between",
+            alignItems:
+              "center",
+            gap: 20,
+            flexWrap: "wrap",
           }}
         >
-          {!isEditing ? (
-            <button
-              className="btn btn-primary"
-              onClick={handleEdit}
+          <div
+            style={{
+              display: "flex",
+              alignItems:
+                "center",
+              gap: 16,
+            }}
+          >
+            <div
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 18,
+                display: "grid",
+                placeItems:
+                  "center",
+                background:
+                  "#eef2ff",
+                color: "#4f46e5",
+                fontWeight: 800,
+                fontSize: 20,
+              }}
             >
-              <Edit3 size={16} />
-              Edit Customer
-            </button>
-          ) : (
-            <>
-              <button
-                className="btn btn-secondary"
-                onClick={() => {
-                  setIsEditing(false);
-                  setFormData({
-                    ...customer,
-                  });
+              {initials}
+            </div>
+
+            <div>
+              <h2
+                style={{
+                  margin: 0,
                 }}
-                disabled={saving}
               >
-                <X size={16} />
-                Cancel
-              </button>
+                {customer.name}
+              </h2>
 
-              <button
-                className="btn btn-primary"
-                onClick={handleSave}
-                disabled={saving}
+              <p
+                style={{
+                  margin:
+                    "5px 0 0",
+                  color:
+                    "#64748b",
+                }}
               >
-                <Save size={16} />
+                {customer.email}
+              </p>
 
-                {saving
-                  ? "Saving..."
-                  : "Save Changes"}
-              </button>
-            </>
-          )}
+              <small
+                style={{
+                  color:
+                    "#94a3b8",
+                }}
+              >
+                Customer ID:{" "}
+                {customerId}
+              </small>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+            }}
+          >
+            <button
+              type="button"
+              className="text-button"
+              onClick={onBack}
+            >
+              Back
+            </button>
+
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() =>
+                setEditMode(
+                  !editMode
+                )
+              }
+            >
+              {editMode
+                ? "Cancel Edit"
+                : "Edit Customer"}
+            </button>
+          </div>
         </div>
-      </div>
-
-      {/* ERROR */}
+      </section>
 
       {error && (
         <div
           style={{
-            marginBottom: "20px",
-            padding: "12px 16px",
-            borderRadius: "10px",
+            padding: "13px 16px",
+            borderRadius: 10,
             background:
-              "rgba(239, 68, 68, 0.1)",
-            color: "#ef4444",
+              "#fff1f2",
+            color: "#be123c",
+            border:
+              "1px solid #fecdd3",
           }}
         >
           {error}
         </div>
       )}
 
-      {/* CUSTOMER HEADER */}
+      {/* EDIT FORM */}
 
-      <div
-        className="card"
-        style={{
-          marginBottom: "20px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "18px",
-          }}
+      {editMode ? (
+        <form
+          className="panel"
+          onSubmit={handleSave}
         >
-          <div
-            style={{
-              width: "64px",
-              height: "64px",
-              borderRadius: "50%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background:
-                "rgba(99, 102, 241, 0.15)",
-              color: "#6366f1",
-              fontSize: "22px",
-              fontWeight: "700",
-            }}
-          >
-            {customer.name
-              ?.charAt(0)
-              ?.toUpperCase() || "?"}
+          <div className="panel-heading">
+            <div>
+              <h3>
+                Edit Customer
+              </h3>
+
+              <p>
+                Update customer
+                information.
+              </p>
+            </div>
           </div>
 
-          <div>
-            <h2 style={{ margin: 0 }}>
-              {customer.name}
-            </h2>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 18,
+            }}
+          >
+            <label>
+              Full Name
+              <input
+                name="name"
+                value={
+                  formData.name
+                }
+                onChange={
+                  handleChange
+                }
+                required
+              />
+            </label>
 
-            <p
+            <label>
+              Email
+              <input
+                type="email"
+                name="email"
+                value={
+                  formData.email
+                }
+                onChange={
+                  handleChange
+                }
+                required
+              />
+            </label>
+
+            <label>
+              Age
+              <input
+                type="number"
+                name="age"
+                value={
+                  formData.age
+                }
+                onChange={
+                  handleChange
+                }
+              />
+            </label>
+
+            <label>
+              Gender
+              <select
+                name="gender"
+                value={
+                  formData.gender
+                }
+                onChange={
+                  handleChange
+                }
+              >
+                <option value="">
+                  Select Gender
+                </option>
+
+                <option value="Male">
+                  Male
+                </option>
+
+                <option value="Female">
+                  Female
+                </option>
+
+                <option value="Other">
+                  Other
+                </option>
+              </select>
+            </label>
+
+            <label>
+              Location
+              <input
+                name="location"
+                value={
+                  formData.location
+                }
+                onChange={
+                  handleChange
+                }
+              />
+            </label>
+
+            <label>
+              Subscription
+              <select
+                name="subscription"
+                value={
+                  formData.subscription
+                }
+                onChange={
+                  handleChange
+                }
+              >
+                <option value="">
+                  Select Plan
+                </option>
+
+                <option value="Basic">
+                  Basic
+                </option>
+
+                <option value="Standard">
+                  Standard
+                </option>
+
+                <option value="Premium">
+                  Premium
+                </option>
+
+                <option value="Enterprise">
+                  Enterprise
+                </option>
+              </select>
+            </label>
+
+            <label>
+              Monthly Spend
+              <input
+                type="number"
+                name="monthlySpend"
+                value={
+                  formData.monthlySpend
+                }
+                onChange={
+                  handleChange
+                }
+              />
+            </label>
+
+            <label>
+              Tenure
+              <input
+                type="number"
+                name="tenure"
+                value={
+                  formData.tenure
+                }
+                onChange={
+                  handleChange
+                }
+              />
+            </label>
+
+            <label>
+              Churn Risk Score
+              <input
+                type="number"
+                name="churnRisk"
+                min="0"
+                max="100"
+                value={
+                  formData.churnRisk
+                }
+                onChange={
+                  handleChange
+                }
+              />
+            </label>
+
+            <label>
+              Churn Status
+              <select
+                name="churnStatus"
+                value={
+                  formData.churnStatus
+                }
+                onChange={
+                  handleChange
+                }
+              >
+                <option value="Low">
+                  Low
+                </option>
+
+                <option value="Medium">
+                  Medium
+                </option>
+
+                <option value="High">
+                  High
+                </option>
+              </select>
+            </label>
+          </div>
+
+          <div
+            style={{
+              marginTop: 22,
+              display: "flex",
+              justifyContent:
+                "flex-end",
+              gap: 10,
+            }}
+          >
+            <button
+              type="button"
+              className="text-button"
+              onClick={() =>
+                setEditMode(false)
+              }
+              disabled={saving}
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              className="primary-button"
+              disabled={saving}
+            >
+              {saving
+                ? "Saving..."
+                : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <>
+          {/* RISK SUMMARY */}
+
+          <section className="metric-grid">
+            <article className="metric-card">
+              <div className="metric-top">
+                <span>
+                  Churn Risk
+                </span>
+              </div>
+
+              <h2>
+                {risk}
+              </h2>
+
+              <div className="metric-foot">
+                <span>
+                  Current status
+                </span>
+              </div>
+            </article>
+
+            <article className="metric-card">
+              <div className="metric-top">
+                <span>
+                  Risk Score
+                </span>
+              </div>
+
+              <h2>
+                {score}%
+              </h2>
+
+              <div className="metric-foot">
+                <span>
+                  Customer score
+                </span>
+              </div>
+            </article>
+
+            <article className="metric-card">
+              <div className="metric-top">
+                <span>
+                  Monthly Spend
+                </span>
+              </div>
+
+              <h2>
+                $
+                {Number(
+                  customer.monthlySpend ||
+                    0
+                ).toLocaleString()}
+              </h2>
+
+              <div className="metric-foot">
+                <span>
+                  Current plan spend
+                </span>
+              </div>
+            </article>
+
+            <article className="metric-card">
+              <div className="metric-top">
+                <span>
+                  Tenure
+                </span>
+              </div>
+
+              <h2>
+                {customer.tenure ??
+                  0}
+              </h2>
+
+              <div className="metric-foot">
+                <span>
+                  Months
+                </span>
+              </div>
+            </article>
+          </section>
+
+          {/* CUSTOMER INFORMATION */}
+
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <h3>
+                  Customer Information
+                </h3>
+
+                <p>
+                  Profile information
+                  stored in MongoDB.
+                </p>
+              </div>
+            </div>
+
+            <div
               style={{
-                margin: "5px 0 0",
-                opacity: 0.7,
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: 20,
               }}
             >
-              {customer.customerId}
-            </p>
-          </div>
+              <div>
+                <small>
+                  Full Name
+                </small>
 
-          <div
-            style={{
-              marginLeft: "auto",
-              display: "flex",
-              gap: "8px",
-              alignItems: "center",
-            }}
-          >
-            <span
-              className={`status-badge ${riskClass}`}
-            >
-              {customer.churnStatus ||
-                "Low"}{" "}
-              Risk
-            </span>
+                <strong
+                  style={{
+                    display:
+                      "block",
+                    marginTop: 5,
+                  }}
+                >
+                  {customer.name ||
+                    "-"}
+                </strong>
+              </div>
 
-            <strong>
-              {Number(
-                customer.churnRisk || 0
-              )}
-              %
-            </strong>
-          </div>
-        </div>
-      </div>
+              <div>
+                <small>
+                  Email
+                </small>
 
-      {/* DETAILS GRID */}
+                <strong
+                  style={{
+                    display:
+                      "block",
+                    marginTop: 5,
+                  }}
+                >
+                  {customer.email ||
+                    "-"}
+                </strong>
+              </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit, minmax(280px, 1fr))",
-          gap: "20px",
-        }}
-      >
+              <div>
+                <small>
+                  Age
+                </small>
 
-        {/* PERSONAL */}
+                <strong
+                  style={{
+                    display:
+                      "block",
+                    marginTop: 5,
+                  }}
+                >
+                  {customer.age ??
+                    "-"}
+                </strong>
+              </div>
 
-        <div className="card">
-          <h3>
-            <User size={18} />
-            Personal Information
-          </h3>
+              <div>
+                <small>
+                  Gender
+                </small>
 
-          <div
-            style={{
-              display: "grid",
-              gap: "16px",
-              marginTop: "18px",
-            }}
-          >
-            <DetailItem
-              icon={<User size={16} />}
-              label="Full Name"
-              value={
-                isEditing ? (
-                  <input
-                    name="name"
-                    value={
-                      formData.name || ""
-                    }
-                    onChange={
-                      handleChange
-                    }
-                  />
-                ) : (
-                  customer.name
-                )
-              }
-            />
+                <strong
+                  style={{
+                    display:
+                      "block",
+                    marginTop: 5,
+                  }}
+                >
+                  {customer.gender ||
+                    "-"}
+                </strong>
+              </div>
 
-            <DetailItem
-              icon={<Mail size={16} />}
-              label="Email"
-              value={
-                isEditing ? (
-                  <input
-                    name="email"
-                    type="email"
-                    value={
-                      formData.email || ""
-                    }
-                    onChange={
-                      handleChange
-                    }
-                  />
-                ) : (
-                  customer.email
-                )
-              }
-            />
+              <div>
+                <small>
+                  Location
+                </small>
 
-            <DetailItem
-              icon={<User size={16} />}
-              label="Gender"
-              value={
-                isEditing ? (
-                  <select
-                    name="gender"
-                    value={
-                      formData.gender || ""
-                    }
-                    onChange={
-                      handleChange
-                    }
-                  >
-                    <option value="">
-                      Select
-                    </option>
-                    <option value="Male">
-                      Male
-                    </option>
-                    <option value="Female">
-                      Female
-                    </option>
-                    <option value="Other">
-                      Other
-                    </option>
-                  </select>
-                ) : (
-                  customer.gender || "-"
-                )
-              }
-            />
+                <strong
+                  style={{
+                    display:
+                      "block",
+                    marginTop: 5,
+                  }}
+                >
+                  {customer.location ||
+                    "-"}
+                </strong>
+              </div>
 
-            <DetailItem
-              icon={<User size={16} />}
-              label="Age"
-              value={
-                isEditing ? (
-                  <input
-                    name="age"
-                    type="number"
-                    value={
-                      formData.age ?? ""
-                    }
-                    onChange={
-                      handleChange
-                    }
-                  />
-                ) : (
-                  customer.age ?? "-"
-                )
-              }
-            />
+              <div>
+                <small>
+                  Subscription
+                </small>
 
-            <DetailItem
-              icon={<MapPin size={16} />}
-              label="Location"
-              value={
-                isEditing ? (
-                  <input
-                    name="location"
-                    value={
-                      formData.location || ""
-                    }
-                    onChange={
-                      handleChange
-                    }
-                  />
-                ) : (
-                  customer.location || "-"
-                )
-              }
-            />
-          </div>
-        </div>
+                <strong
+                  style={{
+                    display:
+                      "block",
+                    marginTop: 5,
+                  }}
+                >
+                  {customer.subscription ||
+                    "-"}
+                </strong>
+              </div>
 
-        {/* SUBSCRIPTION */}
+              <div>
+                <small>
+                  Tenure
+                </small>
 
-        <div className="card">
-          <h3>
-            <DollarSign size={18} />
-            Subscription
-          </h3>
+                <strong
+                  style={{
+                    display:
+                      "block",
+                    marginTop: 5,
+                  }}
+                >
+                  {customer.tenure ??
+                    "-"}{" "}
+                  months
+                </strong>
+              </div>
 
-          <div
-            style={{
-              display: "grid",
-              gap: "16px",
-              marginTop: "18px",
-            }}
-          >
-            <DetailItem
-              label="Plan"
-              value={
-                isEditing ? (
-                  <select
-                    name="subscription"
-                    value={
-                      formData.subscription || ""
-                    }
-                    onChange={
-                      handleChange
-                    }
-                  >
-                    <option value="">
-                      Select Plan
-                    </option>
-                    <option value="Basic">
-                      Basic
-                    </option>
-                    <option value="Standard">
-                      Standard
-                    </option>
-                    <option value="Premium">
-                      Premium
-                    </option>
-                    <option value="Enterprise">
-                      Enterprise
-                    </option>
-                  </select>
-                ) : (
-                  customer.subscription ||
-                  "-"
-                )
-              }
-            />
+              <div>
+                <small>
+                  Created
+                </small>
 
-            <DetailItem
-              label="Monthly Spend"
-              value={
-                isEditing ? (
-                  <input
-                    name="monthlySpend"
-                    type="number"
-                    value={
-                      formData.monthlySpend ??
-                      ""
-                    }
-                    onChange={
-                      handleChange
-                    }
-                  />
-                ) : (
-                  `$${Number(
-                    customer.monthlySpend || 0
-                  ).toFixed(2)}`
-                )
-              }
-            />
+                <strong
+                  style={{
+                    display:
+                      "block",
+                    marginTop: 5,
+                  }}
+                >
+                  {customer.createdAt
+                    ? new Date(
+                        customer.createdAt
+                      ).toLocaleDateString()
+                    : "-"}
+                </strong>
+              </div>
+            </div>
+          </section>
 
-            <DetailItem
-              label="Tenure"
-              value={
-                isEditing ? (
-                  <input
-                    name="tenure"
-                    type="number"
-                    value={
-                      formData.tenure ?? ""
-                    }
-                    onChange={
-                      handleChange
-                    }
-                  />
-                ) : (
-                  `${
-                    customer.tenure ?? 0
-                  } months`
-                )
-              }
-            />
+          {/* RISK PROFILE */}
 
-            <DetailItem
-              icon={
-                <Calendar size={16} />
-              }
-              label="Joined"
-              value={joinedDate}
-            />
-          </div>
-        </div>
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <h3>
+                  Churn Risk Profile
+                </h3>
 
-        {/* CHURN RISK */}
+                <p>
+                  Current customer risk
+                  assessment.
+                </p>
+              </div>
+            </div>
 
-        <div className="card">
-          <h3>
-            <ShieldAlert size={18} />
-            Churn Risk
-          </h3>
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent:
+                    "space-between",
+                  marginBottom: 8,
+                }}
+              >
+                <span>
+                  Risk Score
+                </span>
 
-          <div
-            style={{
-              display: "grid",
-              gap: "16px",
-              marginTop: "18px",
-            }}
-          >
-            <DetailItem
-              label="Risk Score"
-              value={
-                isEditing ? (
-                  <input
-                    name="churnRisk"
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={
-                      formData.churnRisk ?? 0
-                    }
-                    onChange={
-                      handleChange
-                    }
-                  />
-                ) : (
-                  `${
-                    customer.churnRisk ?? 0
-                  }%`
-                )
-              }
-            />
+                <strong>
+                  {score}%
+                </strong>
+              </div>
 
-            <DetailItem
-              label="Risk Status"
-              value={
-                isEditing ? (
-                  <select
-                    name="churnStatus"
-                    value={
-                      formData.churnStatus ||
-                      "Low"
-                    }
-                    onChange={
-                      handleChange
-                    }
-                  >
-                    <option value="Low">
-                      Low
-                    </option>
-                    <option value="Medium">
-                      Medium
-                    </option>
-                    <option value="High">
-                      High
-                    </option>
-                  </select>
-                ) : (
-                  customer.churnStatus ||
-                  "Low"
-                )
-              }
-            />
-
-            <DetailItem
-              label="Customer ID"
-              value={
-                customer.customerId
-              }
-            />
-
-            <DetailItem
-              label="Database ID"
-              value={
-                customer._id || "-"
-              }
-            />
-          </div>
-        </div>
-      </div>
+              <div
+                style={{
+                  height: 12,
+                  borderRadius: 20,
+                  background:
+                    "#e2e8f0",
+                  overflow:
+                    "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    width: `${Math.min(
+                      Math.max(
+                        score,
+                        0
+                      ),
+                      100
+                    )}%`,
+                    height: "100%",
+                    background:
+                      risk ===
+                      "High"
+                        ? "#ef4444"
+                        : risk ===
+                          "Medium"
+                        ? "#f59e0b"
+                        : "#10b981",
+                    borderRadius:
+                      20,
+                  }}
+                />
+              </div>
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }
 
-// =====================================================
-// DETAIL ITEM
-// =====================================================
-
-function DetailItem({
-  icon,
-  label,
-  value,
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "10px",
-        justifyContent: "space-between",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          opacity: 0.7,
-          minWidth: "130px",
-        }}
-      >
-        {icon}
-        <span>{label}</span>
-      </div>
-
-      <div
-        style={{
-          flex: 1,
-          textAlign: "right",
-          fontWeight: "500",
-        }}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
+export default CustomerDetails;

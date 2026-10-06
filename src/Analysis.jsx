@@ -1,223 +1,84 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-} from "recharts";
-import {
-  TrendingDown,
-  TrendingUp,
-  Users,
-  UserCheck,
-  AlertTriangle,
-  CalendarDays,
-  RefreshCw,
-  DollarSign,
-} from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
 
 const API_URL =
-  "http://localhost:5000/api/analytics/summary";
+  "https://churniq-backend-0c1x.onrender.com/api/analytics/summary";
 
-const COLORS = [
-  "#6366f1",
-  "#06b6d4",
-  "#f59e0b",
-  "#f97316",
-  "#94a3b8",
-];
+function Analysis() {
+  const [analytics, setAnalytics] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-const cardStyle = {
-  background: "var(--card-bg, #fff)",
-  border: "1px solid var(--border-color, #e5e7eb)",
-  borderRadius: 16,
-  padding: 20,
-  minWidth: 0,
-};
-
-// =========================
-// METRIC CARD
-// =========================
-function MetricCard({
-  icon: Icon,
-  label,
-  value,
-  change,
-  positive,
-  color,
-}) {
-  return (
-    <div style={cardStyle}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
-        <div>
-          <p
-            style={{
-              color:
-                "var(--muted-text, #64748b)",
-              margin: 0,
-              fontSize: 13,
-            }}
-          >
-            {label}
-          </p>
-
-          <h2
-            style={{
-              margin: "10px 0",
-              fontSize: 27,
-              color:
-                "var(--text-color, #111827)",
-            }}
-          >
-            {value}
-          </h2>
-
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 5,
-              color: positive
-                ? "#16a34a"
-                : "#dc2626",
-              fontSize: 12,
-              fontWeight: 600,
-            }}
-          >
-            {positive ? (
-              <TrendingDown size={14} />
-            ) : (
-              <TrendingUp size={14} />
-            )}
-
-            {change}
-          </span>
-        </div>
-
-        <div
-          style={{
-            width: 42,
-            height: 42,
-            borderRadius: 12,
-            background: `${color}18`,
-            color,
-            display: "grid",
-            placeItems: "center",
-            flexShrink: 0,
-          }}
-        >
-          <Icon size={21} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// =========================
-// CHART CARD
-// =========================
-function ChartCard({
-  title,
-  subtitle,
-  children,
-}) {
-  return (
-    <section style={cardStyle}>
-      <div style={{ marginBottom: 18 }}>
-        <h3
-          style={{
-            margin: 0,
-            fontSize: 16,
-            color:
-              "var(--text-color, #111827)",
-          }}
-        >
-          {title}
-        </h3>
-
-        <p
-          style={{
-            margin: "6px 0 0",
-            color:
-              "var(--muted-text, #64748b)",
-            fontSize: 12,
-          }}
-        >
-          {subtitle}
-        </p>
-      </div>
-
-      {children}
-    </section>
-  );
-}
-
-// =========================
-// MAIN ANALYSIS
-// =========================
-export default function AnalysisPage() {
-  const [period, setPeriod] =
-    useState("Current");
-
-  const [analytics, setAnalytics] =
-    useState(null);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState("");
-
-  // =========================
-  // FETCH ANALYTICS
-  // =========================
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const response =
-        await fetch(API_URL);
+      const response = await fetch(API_URL);
 
       if (!response.ok) {
         throw new Error(
-          "Failed to fetch analytics"
+          `Analytics API returned ${response.status}`
         );
       }
 
-      const result =
-        await response.json();
+      const result = await response.json();
 
-      if (!result.success) {
+      console.log("Analysis API response:", result);
+
+      /*
+        Backend may return either:
+
+        1. Direct analytics object:
+        {
+          totalCustomers: 1,
+          highRisk: 0,
+          mediumRisk: 1,
+          lowRisk: 0,
+          totalRevenue: 10000,
+          averageChurnScore: 72,
+          subscriptionBreakdown: {
+            Premium: 1
+          }
+        }
+
+        OR:
+
+        2. Wrapped response:
+        {
+          success: true,
+          data: {
+            ...
+          }
+        }
+      */
+
+      const analyticsData =
+        result?.data &&
+        typeof result.data === "object" &&
+        !Array.isArray(result.data)
+          ? result.data
+          : result;
+
+      if (
+        !analyticsData ||
+        typeof analyticsData !== "object" ||
+        Array.isArray(analyticsData)
+      ) {
         throw new Error(
-          result.message ||
-            "Analytics request failed"
+          "Analytics API returned invalid data"
         );
       }
 
-      setAnalytics(result.data);
+      setAnalytics(analyticsData);
     } catch (err) {
-      console.error(
-        "Analytics error:",
-        err
-      );
+      console.error("Analytics error:", err);
 
       setError(
-        "Unable to load analytics data. Make sure the backend is running."
+        err.message ||
+          "Unable to load analytics data."
       );
+
+      setAnalytics(null);
     } finally {
       setLoading(false);
     }
@@ -227,757 +88,809 @@ export default function AnalysisPage() {
     fetchAnalytics();
   }, []);
 
-  // =========================
-  // CALCULATED DATA
-  // =========================
-  const totalCustomers =
-    analytics?.totalCustomers || 0;
+  const totalCustomers = Number(
+    analytics?.totalCustomers || 0
+  );
 
-  const highRisk =
-    analytics?.highRisk || 0;
+  const highRisk = Number(
+    analytics?.highRisk || 0
+  );
 
-  const mediumRisk =
-    analytics?.mediumRisk || 0;
+  const mediumRisk = Number(
+    analytics?.mediumRisk || 0
+  );
 
-  const lowRisk =
-    analytics?.lowRisk || 0;
+  const lowRisk = Number(
+    analytics?.lowRisk || 0
+  );
 
-  const averageChurnScore =
-    analytics?.averageChurnScore || 0;
+  const averageChurnScore = Number(
+    analytics?.averageChurnScore || 0
+  );
 
-  const totalRevenue =
-    analytics?.totalRevenue || 0;
+  const totalRevenue = Number(
+    analytics?.totalRevenue || 0
+  );
 
   const highRiskRate =
     totalCustomers > 0
       ? (highRisk / totalCustomers) * 100
       : 0;
 
-  const retentionRate =
-    Math.max(
-      0,
-      100 - highRiskRate
-    );
+  const mediumRiskRate =
+    totalCustomers > 0
+      ? (mediumRisk / totalCustomers) * 100
+      : 0;
 
-  // =========================
-  // RISK DATA
-  // =========================
-  const riskData = useMemo(
-    () => [
-      {
-        name: "Low Risk",
-        value: lowRisk,
-      },
-      {
-        name: "Medium Risk",
-        value: mediumRisk,
-      },
-      {
-        name: "High Risk",
-        value: highRisk,
-      },
-    ],
-    [
-      lowRisk,
-      mediumRisk,
-      highRisk,
-    ]
+  const lowRiskRate =
+    totalCustomers > 0
+      ? (lowRisk / totalCustomers) * 100
+      : 0;
+
+  const retentionRate = Math.max(
+    0,
+    100 - highRiskRate
   );
 
-  // =========================
-  // PLAN DATA
-  // =========================
-  const planData = useMemo(() => {
-    const breakdown =
-      analytics
-        ?.subscriptionBreakdown || {};
+  const subscriptionBreakdown =
+    analytics?.subscriptionBreakdown || {};
 
+  const subscriptionData = useMemo(() => {
     return Object.entries(
-      breakdown
-    ).map(([plan, customers]) => ({
-      plan,
-      customers,
+      subscriptionBreakdown
+    ).map(([name, count]) => ({
+      name,
+      count: Number(count || 0),
     }));
-  }, [analytics]);
+  }, [subscriptionBreakdown]);
 
-  // =========================
-  // RISK BAR DATA
-  // =========================
-  const riskBarData = [
-    {
-      category: "Low",
-      customers: lowRisk,
-    },
-    {
-      category: "Medium",
-      customers: mediumRisk,
-    },
-    {
-      category: "High",
-      customers: highRisk,
-    },
-  ];
+  const maxSubscriptionCount = Math.max(
+    ...subscriptionData.map(
+      (item) => item.count
+    ),
+    1
+  );
 
-  // =========================
-  // LOADING
-  // =========================
   if (loading) {
     return (
-      <div
-        style={{
-          minHeight: "60vh",
-          display: "grid",
-          placeItems: "center",
-        }}
-      >
+      <section className="panel page-panel">
         <div
           style={{
             textAlign: "center",
-            color: "#64748b",
+            padding: "70px 20px",
           }}
         >
-          <RefreshCw
-            size={30}
-            className="spin"
+          <div
+            style={{
+              width: 38,
+              height: 38,
+              margin: "0 auto 16px",
+              border:
+                "3px solid #e2e8f0",
+              borderTopColor:
+                "#6366f1",
+              borderRadius: "50%",
+              animation:
+                "churnSpin 0.8s linear infinite",
+            }}
           />
+
+          <strong>
+            Loading Churn Analysis...
+          </strong>
 
           <p
             style={{
-              marginTop: 12,
+              marginTop: 8,
+              color: "#64748b",
             }}
           >
-            Loading analytics...
+            Fetching live analytics
+            from MongoDB.
           </p>
         </div>
-      </div>
+      </section>
     );
   }
 
-  // =========================
-  // MAIN UI
-  // =========================
-  return (
-    <div
-      style={{
-        display: "grid",
-        gap: 22,
-      }}
-    >
-      {/* HEADER */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent:
-            "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: 14,
-        }}
-      >
-        <div>
-          <h1
+  if (error) {
+    return (
+      <section className="panel page-panel">
+        <div
+          style={{
+            textAlign: "center",
+            padding: "60px 20px",
+          }}
+        >
+          <div
             style={{
-              margin: 0,
-              fontSize: 25,
-              color:
-                "var(--text-color, #111827)",
+              width: 56,
+              height: 56,
+              margin: "0 auto 18px",
+              borderRadius: 16,
+              display: "grid",
+              placeItems: "center",
+              background: "#fff1f2",
+              color: "#e11d48",
+              fontSize: 24,
+              fontWeight: 700,
             }}
           >
-            Churn Analysis
-          </h1>
+            !
+          </div>
+
+          <h2>
+            Unable to load Churn Analysis
+          </h2>
 
           <p
             style={{
-              margin:
-                "7px 0 0",
-              color:
-                "var(--muted-text, #64748b)",
-              fontSize: 13,
+              marginTop: 8,
+              color: "#64748b",
             }}
           >
-            Analyze customer risk,
-            retention and subscription
-            patterns.
+            {error}
           </p>
-        </div>
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          {/* PERIOD */}
-          <div
+          <button
+            type="button"
+            onClick={fetchAnalytics}
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              border:
-                "1px solid var(--border-color, #e5e7eb)",
-              background:
-                "var(--card-bg, #fff)",
-              borderRadius: 10,
-              padding:
-                "8px 11px",
+              marginTop: 18,
+              border: "none",
+              borderRadius: 8,
+              padding: "9px 16px",
+              cursor: "pointer",
+              background: "#6366f1",
+              color: "#fff",
+              fontWeight: 600,
             }}
           >
-            <CalendarDays size={16} />
-
-            <select
-              value={period}
-              onChange={(e) =>
-                setPeriod(
-                  e.target.value
-                )
-              }
-              style={{
-                border: 0,
-                outline: 0,
-                background:
-                  "transparent",
-                color:
-                  "var(--text-color, #111827)",
-                fontSize: 13,
-              }}
-            >
-              <option>
-                Current
-              </option>
-
-              <option>
-                30 days
-              </option>
-
-              <option>
-                3 months
-              </option>
-
-              <option>
-                6 months
-              </option>
-
-              <option>
-                12 months
-              </option>
-            </select>
-          </div>
-
-          {/* REFRESH */}
-          <button
-            className="secondary-btn"
-            onClick={
-              fetchAnalytics
-            }
-          >
-            <RefreshCw size={14} />
-            Refresh
+            Retry
           </button>
         </div>
-      </div>
+      </section>
+    );
+  }
 
-      {/* ERROR */}
-      {error && (
-        <div
-          style={{
-            padding:
-              "13px 16px",
-            borderRadius: 10,
-            background:
-              "#fff1f2",
-            color: "#be123c",
-          }}
-        >
-          {error}
-        </div>
-      )}
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 18,
+      }}
+    >
+      {/* TOP METRICS */}
 
-      {/* KPI CARDS */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit, minmax(190px, 1fr))",
-          gap: 15,
-        }}
-      >
-        <MetricCard
-          icon={Users}
-          label="Total Customers"
-          value={totalCustomers.toLocaleString()}
-          change="Live MongoDB data"
-          positive={true}
-          color="#6366f1"
-        />
+      <section className="metric-grid">
+        <article className="metric-card">
+          <div className="metric-top">
+            <span>Total Customers</span>
 
-        <MetricCard
-          icon={TrendingDown}
-          label="High Risk Rate"
-          value={`${highRiskRate.toFixed(
-            1
-          )}%`}
-          change={`${highRisk} high-risk customers`}
-          positive={
-            highRiskRate < 20
-          }
-          color="#ef4444"
-        />
-
-        <MetricCard
-          icon={UserCheck}
-          label="Retention Rate"
-          value={`${retentionRate.toFixed(
-            1
-          )}%`}
-          change="Based on current risk"
-          positive={true}
-          color="#10b981"
-        />
-
-        <MetricCard
-          icon={AlertTriangle}
-          label="At-Risk Customers"
-          value={highRisk.toLocaleString()}
-          change={`${mediumRisk} medium risk`}
-          positive={false}
-          color="#f59e0b"
-        />
-      </div>
-
-      {/* ADDITIONAL SUMMARY */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: 15,
-        }}
-      >
-        <MetricCard
-          icon={TrendingUp}
-          label="Average Churn Score"
-          value={`${averageChurnScore}/100`}
-          change="Across all customers"
-          positive={
-            averageChurnScore < 50
-          }
-          color="#8b5cf6"
-        />
-
-        <MetricCard
-          icon={DollarSign}
-          label="Monthly Revenue"
-          value={`$${totalRevenue.toLocaleString()}`}
-          change="Total customer spend"
-          positive={true}
-          color="#06b6d4"
-        />
-      </div>
-
-      {/* CHARTS */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit, minmax(min(100%, 360px), 1fr))",
-          gap: 18,
-        }}
-      >
-        {/* RISK DISTRIBUTION */}
-        <ChartCard
-          title="Customer Risk Distribution"
-          subtitle="Current customer distribution by churn risk"
-        >
-          <div
-            style={{
-              width: "100%",
-              height: 280,
-            }}
-          >
-            {totalCustomers === 0 ? (
-              <div
-                style={{
-                  height: "100%",
-                  display: "grid",
-                  placeItems:
-                    "center",
-                  color: "#94a3b8",
-                }}
-              >
-                No customer data available.
-              </div>
-            ) : (
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie
-                    data={riskData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="45%"
-                    innerRadius={58}
-                    outerRadius={92}
-                    paddingAngle={3}
-                  >
-                    {riskData.map(
-                      (entry, index) => (
-                        <Cell
-                          key={
-                            entry.name
-                          }
-                          fill={
-                            COLORS[
-                              index
-                            ]
-                          }
-                        />
-                      )
-                    )}
-                  </Pie>
-
-                  <Tooltip
-                    formatter={(
-                      value
-                    ) => [
-                      value,
-                      "Customers",
-                    ]}
-                  />
-
-                  <Legend
-                    verticalAlign="bottom"
-                    height={42}
-                    iconType="circle"
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
+            <div className="metric-icon blue">
+              👥
+            </div>
           </div>
-        </ChartCard>
 
-        {/* PLAN DISTRIBUTION */}
-        <ChartCard
-          title="Customers by Subscription"
-          subtitle="Current customer count across subscription plans"
-        >
-          <div
-            style={{
-              width: "100%",
-              height: 280,
-            }}
-          >
-            {planData.length ===
-            0 ? (
-              <div
-                style={{
-                  height: "100%",
-                  display: "grid",
-                  placeItems:
-                    "center",
-                  color: "#94a3b8",
-                }}
-              >
-                No subscription data available.
-              </div>
-            ) : (
-              <ResponsiveContainer>
-                <BarChart
-                  data={planData}
-                  margin={{
-                    top: 10,
-                    right: 10,
-                    left: -20,
-                    bottom: 0,
-                  }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="#e5e7eb"
-                  />
+          <h2>
+            {totalCustomers.toLocaleString()}
+          </h2>
 
-                  <XAxis
-                    dataKey="plan"
-                    tickLine={false}
-                    axisLine={false}
-                  />
+          <div className="metric-foot">
+            <span className="positive">
+              Live data
+            </span>
 
-                  <YAxis
-                    tickLine={false}
-                    axisLine={false}
-                  />
-
-                  <Tooltip
-                    formatter={(
-                      value
-                    ) => [
-                      value,
-                      "Customers",
-                    ]}
-                  />
-
-                  <Bar
-                    dataKey="customers"
-                    fill="#06b6d4"
-                    radius={[
-                      6,
-                      6,
-                      0,
-                      0,
-                    ]}
-                    maxBarSize={48}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
+            <span>MongoDB</span>
           </div>
-        </ChartCard>
-      </div>
+        </article>
 
-      {/* RISK LEVEL + RETENTION */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit, minmax(min(100%, 360px), 1fr))",
-          gap: 18,
-        }}
-      >
-        {/* RISK LEVEL BAR */}
-        <ChartCard
-          title="Risk Level Overview"
-          subtitle="Number of customers in each churn risk category"
-        >
-          <div
-            style={{
-              width: "100%",
-              height: 280,
-            }}
-          >
-            <ResponsiveContainer>
-              <BarChart
-                data={riskBarData}
-                margin={{
-                  top: 10,
-                  right: 10,
-                  left: -20,
-                  bottom: 0,
-                }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke="#e5e7eb"
-                />
+        <article className="metric-card">
+          <div className="metric-top">
+            <span>High Risk</span>
 
-                <XAxis
-                  dataKey="category"
-                  tickLine={false}
-                  axisLine={false}
-                />
-
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                />
-
-                <Tooltip
-                  formatter={(
-                    value
-                  ) => [
-                    value,
-                    "Customers",
-                  ]}
-                />
-
-                <Bar
-                  dataKey="customers"
-                  fill="#6366f1"
-                  radius={[
-                    6,
-                    6,
-                    0,
-                    0,
-                  ]}
-                  maxBarSize={55}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="metric-icon purple">
+              ⚠
+            </div>
           </div>
-        </ChartCard>
 
-        {/* RETENTION SUMMARY */}
-        <ChartCard
-          title="Retention Performance"
-          subtitle="Current retention estimate based on high-risk customers"
-        >
+          <h2>
+            {highRisk.toLocaleString()}
+          </h2>
+
+          <div className="metric-foot">
+            <span className="positive">
+              {highRiskRate.toFixed(2)}%
+            </span>
+
+            <span>of customers</span>
+          </div>
+        </article>
+
+        <article className="metric-card">
+          <div className="metric-top">
+            <span>
+              Average Churn Score
+            </span>
+
+            <div className="metric-icon orange">
+              📊
+            </div>
+          </div>
+
+          <h2>
+            {averageChurnScore.toFixed(2)}%
+          </h2>
+
+          <div className="metric-foot">
+            <span className="positive">
+              Live score
+            </span>
+
+            <span>customer risk</span>
+          </div>
+        </article>
+
+        <article className="metric-card">
+          <div className="metric-top">
+            <span>Revenue</span>
+
+            <div className="metric-icon green">
+              $
+            </div>
+          </div>
+
+          <h2>
+            ${totalRevenue.toLocaleString()}
+          </h2>
+
+          <div className="metric-foot">
+            <span className="positive">
+              Monthly spend
+            </span>
+
+            <span>live data</span>
+          </div>
+        </article>
+      </section>
+
+      {/* RISK ANALYSIS */}
+
+      <section className="analytics-grid">
+        <article className="panel">
+          <div className="panel-heading">
+            <div>
+              <h3>
+                Churn Risk Distribution
+              </h3>
+
+              <p>
+                Current customer risk
+                classification
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={fetchAnalytics}
+              className="text-button"
+            >
+              Refresh
+            </button>
+          </div>
+
           <div
             style={{
-              height: 280,
               display: "grid",
-              placeItems:
-                "center",
+              gridTemplateColumns:
+                "minmax(180px, 240px) 1fr",
+              gap: 30,
+              alignItems: "center",
+              padding: "30px 10px",
             }}
           >
             <div
               style={{
-                textAlign: "center",
+                width: 190,
+                height: 190,
+                margin: "auto",
+                borderRadius: "50%",
+                background:
+                  totalCustomers === 0
+                    ? "#e5e7eb"
+                    : `conic-gradient(
+                        #ef4444 0 ${highRiskRate}%,
+                        #f59e0b ${highRiskRate}% ${
+                          highRiskRate +
+                          mediumRiskRate
+                        }%,
+                        #10b981 ${
+                          highRiskRate +
+                          mediumRiskRate
+                        }% 100%
+                      )`,
+                display: "grid",
+                placeItems: "center",
               }}
             >
               <div
                 style={{
-                  width: 150,
-                  height: 150,
-                  borderRadius:
-                    "50%",
-                  background:
-                    `conic-gradient(#10b981 ${retentionRate}%, #edf0f5 0)`,
-                  display: "grid",
-                  placeItems:
-                    "center",
+                  width: 120,
+                  height: 120,
+                  borderRadius: "50%",
+                  background: "#fff",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                <div
+                <strong
                   style={{
-                    width: 112,
-                    height: 112,
-                    borderRadius:
-                      "50%",
-                    background:
-                      "var(--card-bg, #fff)",
-                    display: "grid",
-                    placeItems:
-                      "center",
+                    fontSize: 28,
                   }}
                 >
-                  <div>
-                    <strong
-                      style={{
-                        display:
-                          "block",
-                        fontSize: 28,
-                        color:
-                          "#1d2b46",
-                      }}
-                    >
-                      {retentionRate.toFixed(
-                        1
-                      )}
-                      %
-                    </strong>
+                  {totalCustomers}
+                </strong>
 
-                    <span
-                      style={{
-                        color:
-                          "#929caf",
-                        fontSize: 10,
-                      }}
-                    >
-                      Estimated retention
-                    </span>
-                  </div>
+                <span
+                  style={{
+                    color: "#64748b",
+                    fontSize: 13,
+                  }}
+                >
+                  Customers
+                </span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 18,
+              }}
+            >
+              {/* HIGH RISK */}
+
+              <div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent:
+                      "space-between",
+                    marginBottom: 7,
+                  }}
+                >
+                  <span>
+                    🔴 High Risk
+                  </span>
+
+                  <strong>
+                    {highRisk} (
+                    {highRiskRate.toFixed(1)}
+                    %)
+                  </strong>
+                </div>
+
+                <div
+                  style={{
+                    height: 8,
+                    borderRadius: 20,
+                    background: "#fee2e2",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${highRiskRate}%`,
+                      height: "100%",
+                      background: "#ef4444",
+                    }}
+                  />
                 </div>
               </div>
 
-              <p
-                style={{
-                  marginTop: 16,
-                  color:
-                    "#64748b",
-                  fontSize: 12,
-                }}
-              >
-                Based on current
-                high-risk customer
-                percentage.
+              {/* MEDIUM RISK */}
+
+              <div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent:
+                      "space-between",
+                    marginBottom: 7,
+                  }}
+                >
+                  <span>
+                    🟠 Medium Risk
+                  </span>
+
+                  <strong>
+                    {mediumRisk} (
+                    {mediumRiskRate.toFixed(
+                      1
+                    )}
+                    %)
+                  </strong>
+                </div>
+
+                <div
+                  style={{
+                    height: 8,
+                    borderRadius: 20,
+                    background: "#fef3c7",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${mediumRiskRate}%`,
+                      height: "100%",
+                      background: "#f59e0b",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* LOW RISK */}
+
+              <div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent:
+                      "space-between",
+                    marginBottom: 7,
+                  }}
+                >
+                  <span>
+                    🟢 Low Risk
+                  </span>
+
+                  <strong>
+                    {lowRisk} (
+                    {lowRiskRate.toFixed(1)}
+                    %)
+                  </strong>
+                </div>
+
+                <div
+                  style={{
+                    height: 8,
+                    borderRadius: 20,
+                    background: "#dcfce7",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${lowRiskRate}%`,
+                      height: "100%",
+                      background: "#10b981",
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        {/* RETENTION */}
+
+        <article className="panel">
+          <div className="panel-heading">
+            <div>
+              <h3>
+                Retention Overview
+              </h3>
+
+              <p>
+                Based on current churn
+                risk
               </p>
             </div>
           </div>
-        </ChartCard>
-      </div>
 
-      {/* KEY INSIGHT */}
-      <section
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "30px 20px",
+            }}
+          >
+            <div
+              style={{
+                width: 180,
+                height: 180,
+                borderRadius: "50%",
+                background: `conic-gradient(
+                  #10b981 0 ${retentionRate}%,
+                  #e5e7eb ${retentionRate}% 100%
+                )`,
+                display: "grid",
+                placeItems: "center",
+              }}
+            >
+              <div
+                style={{
+                  width: 112,
+                  height: 112,
+                  borderRadius: "50%",
+                  background: "#fff",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <strong
+                  style={{
+                    fontSize: 27,
+                  }}
+                >
+                  {retentionRate.toFixed(1)}%
+                </strong>
+
+                <span
+                  style={{
+                    color: "#64748b",
+                    fontSize: 13,
+                  }}
+                >
+                  Retention
+                </span>
+              </div>
+            </div>
+
+            <p
+              style={{
+                marginTop: 20,
+                color: "#64748b",
+                textAlign: "center",
+                maxWidth: 280,
+              }}
+            >
+              Current retention estimate
+              based on high-risk customer
+              classification.
+            </p>
+          </div>
+        </article>
+      </section>
+
+      {/* SUBSCRIPTION ANALYSIS */}
+
+      <section className="panel">
+        <div className="panel-heading">
+          <div>
+            <h3>
+              Subscription Distribution
+            </h3>
+
+            <p>
+              Customers grouped by
+              subscription plan
+            </p>
+          </div>
+        </div>
+
+        {subscriptionData.length === 0 ? (
+          <div
+            style={{
+              padding: 40,
+              textAlign: "center",
+              color: "#64748b",
+            }}
+          >
+            No subscription data
+            available.
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 18,
+              padding: "10px 4px 20px",
+            }}
+          >
+            {subscriptionData.map(
+              (item) => {
+                const percentage =
+                  (item.count /
+                    maxSubscriptionCount) *
+                  100;
+
+                return (
+                  <div
+                    key={item.name}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent:
+                          "space-between",
+                        marginBottom: 7,
+                      }}
+                    >
+                      <span>
+                        {item.name}
+                      </span>
+
+                      <strong>
+                        {item.count}
+                      </strong>
+                    </div>
+
+                    <div
+                      style={{
+                        height: 10,
+                        borderRadius: 20,
+                        background: "#e2e8f0",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${percentage}%`,
+                          height: "100%",
+                          background: "#6366f1",
+                          borderRadius: 20,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              }
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* INSIGHTS */}
+
+      <section className="panel">
+        <div className="panel-heading">
+          <div>
+            <h3>
+              Live Analytics Insight
+            </h3>
+
+            <p>
+              Automatically generated
+              from current MongoDB data
+            </p>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: 14,
+          }}
+        >
+          {/* RISK */}
+
+          <div
+            style={{
+              padding: 18,
+              borderRadius: 12,
+              background: "#f8fafc",
+            }}
+          >
+            <strong>Risk</strong>
+
+            <p
+              style={{
+                marginTop: 8,
+                color: "#64748b",
+              }}
+            >
+              {highRiskRate.toFixed(1)}%
+              of customers are currently
+              classified as high risk.
+            </p>
+          </div>
+
+          {/* RETENTION */}
+
+          <div
+            style={{
+              padding: 18,
+              borderRadius: 12,
+              background: "#f8fafc",
+            }}
+          >
+            <strong>
+              Retention
+            </strong>
+
+            <p
+              style={{
+                marginTop: 8,
+                color: "#64748b",
+              }}
+            >
+              Estimated retention is{" "}
+              {retentionRate.toFixed(1)}%
+              based on current risk
+              classification.
+            </p>
+          </div>
+
+          {/* CHURN SCORE */}
+
+          <div
+            style={{
+              padding: 18,
+              borderRadius: 12,
+              background: "#f8fafc",
+            }}
+          >
+            <strong>
+              Churn Score
+            </strong>
+
+            <p
+              style={{
+                marginTop: 8,
+                color: "#64748b",
+              }}
+            >
+              Average customer churn
+              score is{" "}
+              {averageChurnScore.toFixed(2)}
+              %.
+            </p>
+          </div>
+
+          {/* REVENUE */}
+
+          <div
+            style={{
+              padding: 18,
+              borderRadius: 12,
+              background: "#f8fafc",
+            }}
+          >
+            <strong>
+              Revenue
+            </strong>
+
+            <p
+              style={{
+                marginTop: 8,
+                color: "#64748b",
+              }}
+            >
+              Current customer monthly
+              spend totals $
+              {totalRevenue.toLocaleString()}.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* SOURCE */}
+
+      <div
         style={{
-          ...cardStyle,
-          borderLeft:
-            "4px solid #6366f1",
+          textAlign: "right",
+          color: "#64748b",
+          fontSize: 12,
         }}
       >
-        <h3
-          style={{
-            margin:
-              "0 0 8px",
-            color:
-              "var(--text-color, #111827)",
-          }}
-        >
-          Key Insight
-        </h3>
-
-        {totalCustomers ===
-        0 ? (
-          <p
-            style={{
-              margin: 0,
-              color:
-                "var(--muted-text, #64748b)",
-              fontSize: 13,
-              lineHeight: 1.7,
-            }}
-          >
-            Add customers to
-            MongoDB to generate
-            live churn insights.
-          </p>
-        ) : (
-          <p
-            style={{
-              margin: 0,
-              color:
-                "var(--muted-text, #64748b)",
-              fontSize: 13,
-              lineHeight: 1.7,
-            }}
-          >
-            ChurnIQ currently
-            tracks{" "}
-            <strong>
-              {totalCustomers}
-            </strong>{" "}
-            customers.{" "}
-            <strong>
-              {highRisk}
-            </strong>{" "}
-            customers are classified
-            as high risk and{" "}
-            <strong>
-              {mediumRisk}
-            </strong>{" "}
-            as medium risk. The
-            current average churn
-            score is{" "}
-            <strong>
-              {averageChurnScore}
-            </strong>
-            /100.
-          </p>
-        )}
-
-        <p
-          style={{
-            margin:
-              "10px 0 0",
-            fontSize: 11,
-            color:
-              "var(--muted-text, #64748b)",
-          }}
-        >
-          Data source: MongoDB Atlas
-          via ChurnIQ Analytics API.
-        </p>
-      </section>
+        Source: ChurnIQ Analytics API ·
+        MongoDB Atlas
+      </div>
     </div>
   );
 }
+
+export default Analysis;

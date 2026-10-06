@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import AddCustomer from "./AddCustomer";
 
-const API_URL = "http://localhost:5000/api/customers";
+const API_URL = "https://churniq-backend-0c1x.onrender.com";
 
 export default function Customers({ onSelectCustomer }) {
   const [customers, setCustomers] = useState([]);

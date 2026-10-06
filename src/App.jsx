@@ -96,7 +96,8 @@ const SecurityAccess = lazy(() =>
    API
 ========================================================= */
 
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL =
+  "https://churniq-backend-0c1x.onrender.com";
 
 /* =========================================================
    SIDEBAR
@@ -257,7 +258,9 @@ function PageError({ page }) {
           !
         </div>
 
-        <h2>Unable to load {page}</h2>
+        <h2>
+          Unable to load {page}
+        </h2>
 
         <p
           style={{
@@ -318,8 +321,6 @@ class PageErrorBoundary extends React.Component {
 
 /* =========================================================
    DASHBOARD
-   NOTE:
-   Dashboard is intentionally inside App.jsx.
 ========================================================= */
 
 function DashboardPage({
@@ -348,15 +349,27 @@ function DashboardPage({
       setLoading(true);
       setError("");
 
+      /* ---------------------------------------------------
+         FETCH ANALYTICS
+      --------------------------------------------------- */
+
       const analyticsResponse =
         await fetch(
           `${API_BASE_URL}/api/analytics/summary`
         );
 
+      /* ---------------------------------------------------
+         FETCH CUSTOMERS
+      --------------------------------------------------- */
+
       const customersResponse =
         await fetch(
           `${API_BASE_URL}/api/customers`
         );
+
+      /* ---------------------------------------------------
+         CHECK RESPONSE STATUS
+      --------------------------------------------------- */
 
       if (!analyticsResponse.ok) {
         throw new Error(
@@ -370,92 +383,181 @@ function DashboardPage({
         );
       }
 
+      /* ---------------------------------------------------
+         PARSE JSON
+      --------------------------------------------------- */
+
       const analyticsResult =
         await analyticsResponse.json();
 
       const customersResult =
         await customersResponse.json();
 
-      if (
-        !analyticsResult ||
-        analyticsResult.success !== true
-      ) {
-        throw new Error(
-          analyticsResult?.message ||
-            "Analytics API returned invalid data"
-        );
-      }
-
-      if (
-        !customersResult ||
-        customersResult.success !== true
-      ) {
-        throw new Error(
-          customersResult?.message ||
-            "Customers API returned invalid data"
-        );
-      }
-
-      setAnalytics(
-        analyticsResult.data || {}
+      console.log(
+        "Analytics API response:",
+        analyticsResult
       );
 
-      const customers =
+      console.log(
+        "Customers API response:",
+        customersResult
+      );
+
+      /* ===================================================
+         NORMALIZE ANALYTICS RESPONSE
+         
+         Supported formats:
+
+         1. Direct:
+            {
+              totalCustomers: 1,
+              highRisk: 0,
+              ...
+            }
+
+         2. Wrapped:
+            {
+              data: {
+                totalCustomers: 1,
+                ...
+              }
+            }
+      =================================================== */
+
+      const analyticsData =
+        analyticsResult?.data &&
+        typeof analyticsResult.data === "object" &&
+        !Array.isArray(
+          analyticsResult.data
+        )
+          ? analyticsResult.data
+          : analyticsResult;
+
+      if (
+        !analyticsData ||
+        typeof analyticsData !== "object" ||
+        Array.isArray(analyticsData)
+      ) {
+        throw new Error(
+          "Analytics API returned invalid data"
+        );
+      }
+
+      /* ===================================================
+         NORMALIZE CUSTOMERS RESPONSE
+         
+         Supported formats:
+
+         1. Direct array:
+            [...]
+
+         2. Wrapped:
+            { data: [...] }
+
+         3. Wrapped:
+            { customers: [...] }
+      =================================================== */
+
+      let customers = [];
+
+      if (
+        Array.isArray(
+          customersResult
+        )
+      ) {
+        customers =
+          customersResult;
+      } else if (
+        customersResult?.data &&
         Array.isArray(
           customersResult.data
         )
-          ? customersResult.data
-          : [];
+      ) {
+        customers =
+          customersResult.data;
+      } else if (
+        customersResult?.customers &&
+        Array.isArray(
+          customersResult.customers
+        )
+      ) {
+        customers =
+          customersResult.customers;
+      }
+
+      if (!Array.isArray(customers)) {
+        throw new Error(
+          "Customers API returned invalid data"
+        );
+      }
+
+      /* ---------------------------------------------------
+         SET ANALYTICS
+      --------------------------------------------------- */
+
+      setAnalytics(
+        analyticsData
+      );
+
+      /* ---------------------------------------------------
+         MAP CUSTOMER DATA
+      --------------------------------------------------- */
 
       const mappedCustomers =
-        customers.map((customer) => ({
-          id:
-            customer.customerId ||
-            customer._id ||
-            "-",
+        customers.map(
+          (customer) => ({
+            id:
+              customer.customerId ||
+              customer._id ||
+              "-",
 
-          mongoId:
-            customer._id || null,
+            mongoId:
+              customer._id ||
+              null,
 
-          name:
-            customer.name ||
-            "Unknown Customer",
+            name:
+              customer.name ||
+              "Unknown Customer",
 
-          email:
-            customer.email || "-",
+            email:
+              customer.email ||
+              "-",
 
-          plan:
-            customer.subscription ||
-            "Unknown",
+            plan:
+              customer.subscription ||
+              "Unknown",
 
-          risk:
-            customer.churnStatus ||
-            "Low",
+            risk:
+              customer.churnStatus ||
+              "Low",
 
-          score:
-            Number(
-              customer.churnRisk || 0
-            ),
+            score:
+              Number(
+                customer.churnRisk ||
+                  0
+              ),
 
-          joined:
-            customer.createdAt
-              ? new Date(
-                  customer.createdAt
-                ).toLocaleDateString(
-                  "en-US",
-                  {
-                    month: "short",
-                    day: "2-digit",
-                    year: "numeric",
-                  }
-                )
-              : "-",
+            joined:
+              customer.createdAt
+                ? new Date(
+                    customer.createdAt
+                  ).toLocaleDateString(
+                    "en-US",
+                    {
+                      month: "short",
+                      day: "2-digit",
+                      year: "numeric",
+                    }
+                  )
+                : "-",
 
-          revenue:
-            Number(
-              customer.monthlySpend || 0
-            ),
-        }));
+            revenue:
+              Number(
+                customer.monthlySpend ||
+                  0
+              ),
+          })
+        );
 
       setDashboardCustomers(
         mappedCustomers
@@ -463,6 +565,11 @@ function DashboardPage({
 
       console.log(
         "✅ Dashboard connected to backend"
+      );
+
+      console.log(
+        "✅ Customers loaded:",
+        mappedCustomers.length
       );
     } catch (err) {
       console.error(
@@ -512,7 +619,8 @@ function DashboardPage({
 
   const highRiskRate =
     totalCustomers > 0
-      ? (highRisk / totalCustomers) * 100
+      ? (highRisk / totalCustomers) *
+        100
       : 0;
 
   const retentionRate =
@@ -619,7 +727,8 @@ function DashboardPage({
             style={{
               width: 38,
               height: 38,
-              margin: "0 auto 16px",
+              margin:
+                "0 auto 16px",
               border:
                 "3px solid #e2e8f0",
               borderTopColor:
@@ -1223,7 +1332,10 @@ function App() {
   const navigate = (page) => {
     setActivePage(page);
 
-    if (page !== "Customer Details") {
+    if (
+      page !==
+      "Customer Details"
+    ) {
       setSelectedCustomer(null);
     }
 
@@ -1635,39 +1747,47 @@ function App() {
 
         <div className="dashboard-content">
 
-          <div className="welcome-row">
+          {/* =================================================
+              GLOBAL PAGE HEADER
+              SHOW ONLY ON DASHBOARD
+          ================================================= */}
 
-            <div>
-              <p className="eyebrow">
-                CHURNIQ ANALYTICS
-                WORKSPACE
-              </p>
+          {activePage ===
+            "Dashboard" && (
+            <div className="welcome-row">
 
-              <h1>
-                {pageTitle}
-              </h1>
+              <div>
+                <p className="eyebrow">
+                  CHURNIQ ANALYTICS
+                  WORKSPACE
+                </p>
 
-              <p className="subtitle">
-                {descriptions[
-                  activePage
-                ] ||
-                  "Review customer account information and churn risk."}
-              </p>
+                <h1>
+                  Dashboard Overview
+                </h1>
+
+                <p className="subtitle">
+                  Monitor customer behavior
+                  and churn risk across your
+                  workspace.
+                </p>
+              </div>
+
+              <button
+                className="date-button"
+                type="button"
+              >
+                <span>
+                  Last 30 days
+                </span>
+
+                <ChevronDown
+                  size={13}
+                />
+              </button>
+
             </div>
-
-            <button
-              className="date-button"
-              type="button"
-            >
-              <span>
-                Last 30 days
-              </span>
-
-              <ChevronDown
-                size={13}
-              />
-            </button>
-          </div>
+          )}
 
           <Suspense
             fallback={
